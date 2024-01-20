@@ -132,7 +132,9 @@ microtcp_connect (microtcp_sock_t *socket, const struct sockaddr *address,
     message.header.checksum = crc32((const uint8_t*) &message, sizeof(message));
 
     //sent the initial request for connection to the server (SYN)
-    sendto(socket->sd, &message, sizeof(message), 0, address, address_len);
+    if(sendto(socket->sd, &message, sizeof(message), 0, address, address_len) == -1){
+        return -1;
+    }
     socket->seq_number++;
 #ifdef DEBUGPRINTS
     printf("sent SYN with seq# = %d\n\n", message.header.seq_number);
@@ -141,7 +143,9 @@ microtcp_connect (microtcp_sock_t *socket, const struct sockaddr *address,
 
     void *resbuff[MICROTCP_WIN_SIZE];
     //we reseving the message initial message for the request to connect (from the client)
-    recvfrom(socket->sd, &resbuff, socket->init_win_size, 0, address, &address_len);
+    if( recvfrom(socket->sd, &resbuff, socket->init_win_size, 0, address, &address_len) == -1){
+        return -1;
+    }
 
     memcpy(&message, resbuff, sizeof(message_t));
 #ifdef DEBUGPRINTS
@@ -177,7 +181,9 @@ microtcp_connect (microtcp_sock_t *socket, const struct sockaddr *address,
     message.header.checksum = crc32((const uint8_t*) &message, sizeof(message));
 
     //sent the ack back to the server
-    sendto(socket->sd, &message, sizeof(message), 0, address, address_len);
+    if( sendto(socket->sd, &message, sizeof(message), 0, address, address_len) == -1){
+        return -1;
+    }
     socket->seq_number++;
 #ifdef DEBUGPRINTS
     printf("sent ACK with seq# = %d and ack# = %d\n\n", message.header.seq_number, message.header.ack_number);
@@ -200,7 +206,9 @@ microtcp_accept (microtcp_sock_t *socket, struct sockaddr *address,
     void *resbuff[MICROTCP_RECVBUF_LEN];
     //we reseving the message initial message for the request to connect (SYN from the client)
 
-    recvfrom(socket->sd, &resbuff, socket->init_win_size, 0, address, &address_len);
+   if( recvfrom(socket->sd, &resbuff, socket->init_win_size, 0, address, &address_len) == -1){
+        return -1;
+    }
 
     memcpy(&message, resbuff, sizeof(message_t));
 #ifdef DEBUGPRINTS
@@ -239,14 +247,18 @@ microtcp_accept (microtcp_sock_t *socket, struct sockaddr *address,
     message.header.checksum = crc32((const uint8_t*) &message, sizeof(message));
 
     //sent the ack for the sonnection back to the client
-    sendto(socket->sd, &message, sizeof(message), 0, address, address_len);
+    if( sendto(socket->sd, &message, sizeof(message), 0, address, address_len) == -1){
+        return -1;
+    }
     socket->seq_number++;
 #ifdef DEBUGPRINTS
     printf("sent SYN + ACK with seq# = %d and ack# = %d\n\n", message.header.seq_number, message.header.ack_number);
 #endif
 
     //we resive a ack as the final step of the 3-way handshake
-    recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, address, &address_len);
+    if( recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, address, &address_len) == -1){
+        return -1;
+    }
     memcpy(&message, resbuff, sizeof(message_t));
 
 
@@ -300,14 +312,18 @@ microtcp_shutdown (microtcp_sock_t *socket, int how) {
         message.payload[0] = 0;
         message.header.checksum = crc32((const uint8_t *) &message, sizeof(message));
 
-        sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen);
+        if(sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen) == -1){
+            return -1;
+        }
 #ifdef DEBUGPRINTS
         printf("sent FIN + ACK  with seq# = %d, ack# = %d\n\n", message.header.seq_number, message.header.ack_number);
 #endif
         socket->seq_number++;
 
         //now we wait for the ACK of our FIN + ACK
-        recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, &resaddress, &resaddressLen);
+        if( recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, &resaddress, &resaddressLen) == -1){
+            return -1;
+        }
         memcpy(&message, resbuff, sizeof(message_t));
 
         //check that we revived the message correctly
@@ -333,7 +349,9 @@ microtcp_shutdown (microtcp_sock_t *socket, int how) {
 #endif
 
         //now we wait for the FIN + ACK
-        recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, &resaddress, &resaddressLen);
+        if( recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, &resaddress, &resaddressLen) == -1){
+            return -1;
+        }
         memcpy(&message, resbuff, sizeof(message_t));
 
         //check that we revived the message correctly
@@ -366,7 +384,9 @@ microtcp_shutdown (microtcp_sock_t *socket, int how) {
         message.payload[0] = 0;
         message.header.checksum = crc32((const uint8_t *) &message, sizeof(message));
 
-        sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen);
+        if( sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen) == -1){
+            return -1;
+        }
 #ifdef DEBUGPRINTS
         printf("sent ACK  with seq# = %d, ack# = %d\n\n", message.header.seq_number, message.header.ack_number);
 #endif
@@ -393,7 +413,9 @@ microtcp_shutdown (microtcp_sock_t *socket, int how) {
 #endif
 
     //now we wait for the FIN + ACK
-    recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, &resaddress, &resaddressLen);
+    if( recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, &resaddress, &resaddressLen) == -1){
+        return -1;
+    }
     memcpy(&message, resbuff, sizeof(message_t));
 
     //check that we revived the message correctly
@@ -425,7 +447,9 @@ microtcp_shutdown (microtcp_sock_t *socket, int how) {
     message.payload[0] = 0;
     message.header.checksum = crc32((const uint8_t *) &message, sizeof(message));
 
-    sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen);
+    if( sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen) == -1){
+        return -1;
+    }
 #ifdef DEBUGPRINTS
     printf("sent ACK  with seq# = %d, ack# = %d\n\n", message.header.seq_number, message.header.ack_number);
 #endif
@@ -449,14 +473,18 @@ microtcp_shutdown (microtcp_sock_t *socket, int how) {
     message.payload[0] = 0;
     message.header.checksum = crc32((const uint8_t *) &message, sizeof(message));
 
-    sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen);
+    if( sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen) == -1){
+        return -1;
+    }
 #ifdef DEBUGPRINTS
     printf("sent FIN + ACK  with seq# = %d, ack# =  %d\n\n", message.header.seq_number, message.header.ack_number);
 #endif
     socket->seq_number++;
 
     //now we wait for the ACK
-    recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, &resaddress, &resaddressLen);
+    if( recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, &resaddress, &resaddressLen) == -1){
+        return -1;
+    }
     memcpy(&message, resbuff, sizeof(message_t));
 
     //check that we revived the message correctly
@@ -474,6 +502,8 @@ microtcp_shutdown (microtcp_sock_t *socket, int how) {
 
     //save the seq# we got from the client
     socket->ack_number = message.header.seq_number + 1;
+
+    free(socket->recvbuf);
 
     socket->state = CLOSED;
 
