@@ -227,6 +227,7 @@ microtcp_accept (microtcp_sock_t *socket, struct sockaddr *address,
 
     //save the nagosiated winsize
     socket->init_win_size = message.header.window;
+    socket->recvbuf = malloc(socket->init_win_size);
 
     //now we sent the SYN + ACK to accept the connection
     message.header.control = SYN_FLAG | ACK_FLAG;
