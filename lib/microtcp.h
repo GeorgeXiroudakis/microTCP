@@ -24,6 +24,21 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <netinet/in.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+
+//enable or disable DEBUGPRINTS
+#define DEBUGPRINTS
+
+// Define control flags
+#define ACK_FLAG (0b1 << 12)
+#define RST_FLAG (0b1 << 13)
+#define SYN_FLAG (0b1 << 14)
+#define FIN_FLAG (0b1 << 15)
 
 /*
  * Several useful constants
@@ -62,6 +77,9 @@ typedef struct
 {
   int sd;                       /**< The underline UDP socket descriptor */
   mircotcp_state_t state;       /**< The state of the microTCP socket */
+  struct sockaddr peerAdress;    /**<  address of peer */
+  socklen_t peerAdressLen;      /**<   len of peer address */
+  int isServer;                 /**< if the sock belongs to a server */
   size_t init_win_size;         /**< The window size negotiated at the 3-way handshake */
   size_t curr_win_size;         /**< The current window size */
 
@@ -102,7 +120,27 @@ typedef struct
   uint32_t checksum;            /**< CRC-32 checksum, see crc32() in utils folder */
 } microtcp_header_t;
 
+//a struct to packet the header and the payload
+typedef struct {
+    microtcp_header_t header;
+    char payload[MICROTCP_MSS];
+}message_t;
 
+//returns:
+//      0 for success
+//      -1 for failure
+int
+check_resived_checksum(message_t message);
+
+
+//returns:
+//      the initialized micro_TCP struct
+//
+//      for success check the .state of the returned struct
+//      if == INVALID it failed
+//      for exact reason of failure check the .sd of the returned struct
+//          if == -1 fail in underline UDP sock inti
+//          if == -2 fail in malloc for the revbuff
 microtcp_sock_t
 microtcp_socket (int domain, int type, int protocol);
 

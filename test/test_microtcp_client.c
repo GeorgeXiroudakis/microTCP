@@ -23,8 +23,46 @@
  * This file is already inserted at the build system.
  */
 
+#include <../lib/microtcp.h>
+
+
+#define SERVER_LISTENING_PORT 12312
 int
 main(int argc, char **argv)
 {
+    microtcp_sock_t sock;
 
+    sock = microtcp_socket(AF_INET ,SOCK_DGRAM, 0);
+    if(sock.state == INVALID){
+        if(sock.sd == -1){
+            perror("error in micoro_TCP_socket underline UDP");
+            exit(EXIT_FAILURE);
+        }else if(sock.sd == -2){
+            perror("error in micoro_TCP_socket malloc for revbuff");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    struct sockaddr_in sin;
+    memset(&sin, 0, sizeof(struct sockaddr_in));
+    sin.sin_family = AF_INET;
+    sin.sin_port = htons(SERVER_LISTENING_PORT);
+    sin.sin_addr.s_addr = htonl(INADDR_ANY);
+
+
+    if(microtcp_connect(&sock, (struct sockaddr *) &sin, sizeof(sin)) == -1){
+        perror("error in micoro_TCP_connect");
+        exit(EXIT_FAILURE);
+    }
+#ifdef DEBUGPRINTS
+    printf("\nCLIENT after handshake seq# = %ld, ack# = %ld\n\n", sock.seq_number, sock.ack_number);
+#endif
+
+    if(microtcp_shutdown(&sock, 1) == -1){
+        perror("error in micoro_TCP_accept");
+        exit(EXIT_FAILURE);
+    }
+
+    close(sock.sd);
+    return 0;
 }

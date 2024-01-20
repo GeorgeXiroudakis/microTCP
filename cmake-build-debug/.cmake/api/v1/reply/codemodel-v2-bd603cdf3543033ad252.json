@@ -1,0 +1,151 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"childIndexes" : 
+					[
+						1,
+						2
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Debug-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "2.6"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						6
+					]
+				},
+				{
+					"build" : "lib",
+					"jsonFile" : "directory-lib-Debug-c12f15c6f888b43a891c.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "2.6"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "lib",
+					"targetIndexes" : 
+					[
+						1
+					]
+				},
+				{
+					"build" : "test",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-test-Debug-e195d97072de7958f03c.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "2.6"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "test",
+					"targetIndexes" : 
+					[
+						0,
+						2,
+						3,
+						4,
+						5
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0,
+						1,
+						2
+					],
+					"name" : "microtcp",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 2,
+					"id" : "bandwidth_test::@36f028580bb02cc8272a",
+					"jsonFile" : "target-bandwidth_test-Debug-a022c5e4391acef0ad18.json",
+					"name" : "bandwidth_test",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 1,
+					"id" : "microtcp::@306ed2d68c6501e8728f",
+					"jsonFile" : "target-microtcp-Debug-158194bad6c22ef4665a.json",
+					"name" : "microtcp",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 2,
+					"id" : "test_microtcp_client::@36f028580bb02cc8272a",
+					"jsonFile" : "target-test_microtcp_client-Debug-f16d64a993d7c01a321d.json",
+					"name" : "test_microtcp_client",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 2,
+					"id" : "test_microtcp_server::@36f028580bb02cc8272a",
+					"jsonFile" : "target-test_microtcp_server-Debug-54d9fb8a1c99e5f09a91.json",
+					"name" : "test_microtcp_server",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 2,
+					"id" : "traffic_generator::@36f028580bb02cc8272a",
+					"jsonFile" : "target-traffic_generator-Debug-bfd2ecbbb3dd0f83d44a.json",
+					"name" : "traffic_generator",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 2,
+					"id" : "traffic_generator_client::@36f028580bb02cc8272a",
+					"jsonFile" : "target-traffic_generator_client-Debug-40a61afa05c997e0f2d3.json",
+					"name" : "traffic_generator_client",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-uninstall-Debug-6dc158cc0858f096a90b.json",
+					"name" : "uninstall",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/george/csd/ejamino5/HY-335/project/phaseB/microTCP/cmake-build-debug",
+		"source" : "/home/george/csd/ejamino5/HY-335/project/phaseB/microTCP"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 6
+	}
+}
