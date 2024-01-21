@@ -413,105 +413,111 @@ microtcp_shutdown (microtcp_sock_t *socket, int how) {
     printf("srver stating shutdown\n\n");
 #endif
 
-    //now we wait for the FIN + ACK
-    if( recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, &resaddress, &resaddressLen) == -1){
-        return -1;
+//  commented out as this first fin + ack will be resived by the resv of the server
+
+//    //now we wait for the FIN + ACK
+//    if( recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, &resaddress, &resaddressLen) == -1){
+//        return -1;
+//    }
+//    memcpy(&message, resbuff, sizeof(message_t));
+//
+//    //check that we revived the message correctly
+//    if (check_resived_checksum(message))return -1;
+//
+//    //check if we revived a header with only a ack in the control
+//    if ((message.header.control & FIN_FLAG | ACK_FLAG) != (FIN_FLAG | ACK_FLAG) )return -1;
+//
+//    //check the ACK
+//    if (message.header.ack_number != socket->seq_number) return -1;
+//
+//#ifdef DEBUGPRINTS
+//    printf("resiveed FIN + ACK  with seq# = %d, ack# = %d\n\n", message.header.seq_number, message.header.ack_number);
+//#endif
+//
+//    //save the seq# we got from the client
+//    socket->ack_number = message.header.seq_number + 1;
+
+    if(socket->state == CLOSING_BY_PEER) {
+            //sending ACK to server
+            message.header.seq_number = socket->seq_number;
+            message.header.ack_number = socket->ack_number;
+            message.header.control = ACK_FLAG;
+            message.header.window = socket->curr_win_size;
+            message.header.data_len = 0;
+            message.header.future_use0 = 0;
+            message.header.future_use1 = 0;
+            message.header.future_use2 = 0;
+            message.header.checksum = 0;
+            message.payload[0] = 0;
+            message.header.checksum = crc32((const uint8_t *) &message, sizeof(message));
+
+            if (sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen) == -1) {
+                return -1;
+            }
+        #ifdef DEBUGPRINTS
+            printf("sent ACK  with seq# = %d, ack# = %d\n\n", message.header.seq_number, message.header.ack_number);
+        #endif
+            socket->seq_number++;
+
+            socket->state = CLOSING_BY_PEER;
+        #ifdef DEBUGPRINTS
+            printf("server sock CLOESED_BY_PEER\n");
+        #endif
+
+            //sending FIN + ACK to server
+            message.header.seq_number = socket->seq_number;
+            message.header.ack_number = socket->ack_number;
+            message.header.control = FIN_FLAG | ACK_FLAG;
+            message.header.window = socket->curr_win_size;
+            message.header.data_len = 0;
+            message.header.future_use0 = 0;
+            message.header.future_use1 = 0;
+            message.header.future_use2 = 0;
+            message.header.checksum = 0;
+            message.payload[0] = 0;
+            message.header.checksum = crc32((const uint8_t *) &message, sizeof(message));
+
+            if (sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen) == -1) {
+                return -1;
+            }
+        #ifdef DEBUGPRINTS
+            printf("sent FIN + ACK  with seq# = %d, ack# =  %d\n\n", message.header.seq_number, message.header.ack_number);
+        #endif
+            socket->seq_number++;
+
+            //now we wait for the ACK
+            if (recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, &resaddress, &resaddressLen) == -1) {
+                return -1;
+            }
+            memcpy(&message, resbuff, sizeof(message_t));
+
+            //check that we revived the message correctly
+            if (check_resived_checksum(message))return -1;
+
+            //check if we revived a header with only a ack in the control
+            if ((message.header.control & ACK_FLAG) != (ACK_FLAG))return -1;
+
+            //check the ACK
+            if (message.header.ack_number != socket->seq_number) return -1;
+
+        #ifdef DEBUGPRINTS
+            printf("resiveed ACK  with seq# = %d, ack# = %d\n\n", message.header.seq_number, message.header.ack_number);
+        #endif
+
+            //save the seq# we got from the client
+            socket->ack_number = message.header.seq_number + 1;
+
+            free(socket->recvbuf);
+
+            socket->state = CLOSED;
+
+        #ifdef DEBUGPRINTS
+            printf("server sock CLOESED\n\n");
+        #endif
+
+    }else{
+        fprintf(stderr, "clinet has not requested shutdown");
     }
-    memcpy(&message, resbuff, sizeof(message_t));
-
-    //check that we revived the message correctly
-    if (check_resived_checksum(message))return -1;
-
-    //check if we revived a header with only a ack in the control
-    if ((message.header.control & FIN_FLAG | ACK_FLAG) != (FIN_FLAG | ACK_FLAG) )return -1;
-
-    //check the ACK
-    if (message.header.ack_number != socket->seq_number) return -1;
-
-#ifdef DEBUGPRINTS
-    printf("resiveed FIN + ACK  with seq# = %d, ack# = %d\n\n", message.header.seq_number, message.header.ack_number);
-#endif
-
-    //save the seq# we got from the client
-    socket->ack_number = message.header.seq_number + 1;
-
-    //sending ACK to server
-    message.header.seq_number = socket->seq_number;
-    message.header.ack_number = socket->ack_number;
-    message.header.control = ACK_FLAG;
-    message.header.window = socket->curr_win_size;
-    message.header.data_len = 0;
-    message.header.future_use0 = 0;
-    message.header.future_use1 = 0;
-    message.header.future_use2 = 0;
-    message.header.checksum = 0;
-    message.payload[0] = 0;
-    message.header.checksum = crc32((const uint8_t *) &message, sizeof(message));
-
-    if( sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen) == -1){
-        return -1;
-    }
-#ifdef DEBUGPRINTS
-    printf("sent ACK  with seq# = %d, ack# = %d\n\n", message.header.seq_number, message.header.ack_number);
-#endif
-    socket->seq_number++;
-
-    socket->state = CLOSING_BY_PEER;
-#ifdef DEBUGPRINTS
-    printf("server sock CLOESED_BY_PEER\n");
-#endif
-
-    //sending FIN + ACK to server
-    message.header.seq_number = socket->seq_number;
-    message.header.ack_number = socket->ack_number;
-    message.header.control = FIN_FLAG | ACK_FLAG;
-    message.header.window = socket->curr_win_size;
-    message.header.data_len = 0;
-    message.header.future_use0 = 0;
-    message.header.future_use1 = 0;
-    message.header.future_use2 = 0;
-    message.header.checksum = 0;
-    message.payload[0] = 0;
-    message.header.checksum = crc32((const uint8_t *) &message, sizeof(message));
-
-    if( sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen) == -1){
-        return -1;
-    }
-#ifdef DEBUGPRINTS
-    printf("sent FIN + ACK  with seq# = %d, ack# =  %d\n\n", message.header.seq_number, message.header.ack_number);
-#endif
-    socket->seq_number++;
-
-    //now we wait for the ACK
-    if( recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, &resaddress, &resaddressLen) == -1){
-        return -1;
-    }
-    memcpy(&message, resbuff, sizeof(message_t));
-
-    //check that we revived the message correctly
-    if (check_resived_checksum(message))return -1;
-
-    //check if we revived a header with only a ack in the control
-    if ((message.header.control & ACK_FLAG) != (ACK_FLAG) )return -1;
-
-    //check the ACK
-    if (message.header.ack_number != socket->seq_number) return -1;
-
-#ifdef DEBUGPRINTS
-    printf("resiveed ACK  with seq# = %d, ack# = %d\n\n", message.header.seq_number, message.header.ack_number);
-#endif
-
-    //save the seq# we got from the client
-    socket->ack_number = message.header.seq_number + 1;
-
-    free(socket->recvbuf);
-
-    socket->state = CLOSED;
-
-#ifdef DEBUGPRINTS
-    printf("server sock CLOESED\n\n");
-#endif
-
 
     return 0;
 }
@@ -526,5 +532,34 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
 ssize_t
 microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int flags)
 {
-    /* Your code here */
+    message_t message;
+    void *resbuff[MICROTCP_RECVBUF_LEN];
+    struct sockaddr resaddress;
+    socklen_t resaddressLen;
+
+    //we check for for the FIN + ACK
+    if( recvfrom(socket->sd, &resbuff, socket->curr_win_size, 0, &resaddress, &resaddressLen) == -1){
+        return -1;
+    }
+    memcpy(&message, resbuff, sizeof(message_t));
+
+    //check that we revived the message correctly
+    if (check_resived_checksum(message))return -1;
+
+    //check if we revived a header with only a ack in the control
+    if ((message.header.control & FIN_FLAG | ACK_FLAG) != (FIN_FLAG | ACK_FLAG))return -1;
+
+    //check the ACK
+    if (message.header.ack_number != socket->seq_number) return -1;
+
+#ifdef DEBUGPRINTS
+    printf("resiveed FIN + ACK with seq# = %d, ack# = %d\n\n", message.header.seq_number, message.header.ack_number);
+#endif
+
+    //save the seq# we got from the client
+    socket->ack_number = message.header.seq_number + 1;
+
+    //change the socket state
+    socket->state = CLOSING_BY_PEER;
+
 }

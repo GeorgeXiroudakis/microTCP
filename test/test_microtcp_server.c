@@ -36,6 +36,7 @@ main(int argc, char **argv)
     struct sockaddr_in clients_sin;
     int acceptSock;
 
+
     sock = microtcp_socket(AF_INET ,SOCK_DGRAM, 0);
     if(sock.state == INVALID){
         if(sock.sd == -1){
@@ -68,10 +69,18 @@ main(int argc, char **argv)
     printf("\nSERVER after handshake seq# = %ld, ack# = %ld\n\n", sock.seq_number, sock.ack_number);
 #endif
 
-    if(microtcp_shutdown(&sock, 1) == -1){
-        perror("error in micoro_TCP_accept");
-        exit(EXIT_FAILURE);
+    if(microtcp_recv(&sock,) == -1 && sock.state == CLOSING_BY_PEER){
+        if(microtcp_shutdown(&sock, 0) == -1){
+            perror("error in shutdown");
+        }
+        close(sock.sd);
+        return 0;
     }
+
+//    if(microtcp_shutdown(&sock, 1) == -1){
+//        perror("error in micoro_TCP_accept");
+//        exit(EXIT_FAILURE);
+//    }
 
 
     close(sock.sd);
