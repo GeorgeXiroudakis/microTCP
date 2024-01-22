@@ -123,8 +123,22 @@ typedef struct
 //a struct to packet the header and the payload
 typedef struct {
     microtcp_header_t header;
-    char payload[MICROTCP_MSS];
+    uint8_t payload[MICROTCP_MSS];
 }message_t;
+
+size_t min(size_t a, size_t b, size_t c) {
+    size_t min_value = a;
+
+    if (b < min_value) {
+        min_value = b;
+    }
+
+    if (c < min_value) {
+        min_value = c;
+    }
+
+    return min_value;
+}
 
 //returns:
 //      0 for success

@@ -26,11 +26,13 @@
 #include <../lib/microtcp.h>
 
 
-#define SERVER_LISTENING_PORT 12312
+#define SERVER_LISTENING_PORT 12322
+
 int
 main(int argc, char **argv)
 {
     microtcp_sock_t sock;
+    void* resbuff;
 
     sock = microtcp_socket(AF_INET ,SOCK_DGRAM, 0);
     if(sock.state == INVALID){
@@ -57,6 +59,11 @@ main(int argc, char **argv)
 #ifdef DEBUGPRINTS
     printf("\nCLIENT after handshake seq# = %ld, ack# = %ld\n\n", sock.seq_number, sock.ack_number);
 #endif
+
+    resbuff = malloc(MICROTCP_MSS);
+    if(microtcp_recv(&sock, resbuff, MICROTCP_MSS, 0) == -1){
+        perror("error in recv\n");
+    }
 
     if(microtcp_shutdown(&sock, 1) == -1){
         perror("error in micoro_TCP_accept");
