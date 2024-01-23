@@ -60,10 +60,15 @@ main(int argc, char **argv)
     printf("\nCLIENT after handshake seq# = %ld, ack# = %ld\n\n", sock.seq_number, sock.ack_number);
 #endif
 
-    resbuff = malloc(MICROTCP_MSS);
-    if(microtcp_recv(&sock, resbuff, MICROTCP_MSS, 0) == -1){
+    resbuff = malloc(MICROTCP_RECVBUF_LEN);
+    ssize_t res;
+    do{
+        res = microtcp_recv(&sock, resbuff, MICROTCP_MSS, 0);
+    } while (res > 0);
+    if(res == -1){
         perror("error in recv\n");
     }
+
 
     if(microtcp_shutdown(&sock, 1) == -1){
         perror("error in micoro_TCP_accept");

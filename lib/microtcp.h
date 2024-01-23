@@ -30,6 +30,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <errno.h>
 
 //enable or disable DEBUGPRINTS
 #define DEBUGPRINTS
