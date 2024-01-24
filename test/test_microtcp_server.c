@@ -97,6 +97,8 @@ main(int argc, char **argv)
         if(microtcp_shutdown(&sock, 0) == -1){
             perror("error in shutdown");
         }
+
+        //resivers prosseces data
         return 0;
     }
 

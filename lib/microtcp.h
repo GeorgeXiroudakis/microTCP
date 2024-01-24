@@ -51,6 +51,8 @@
 #define MICROTCP_INIT_CWND (3 * MICROTCP_MSS)
 #define MICROTCP_INIT_SSTHRESH MICROTCP_WIN_SIZE
 
+enum cwd_states{slow_start, congestion_avoidance, fast_recovery};
+
 /**
  * Possible states of the microTCP socket
  *
@@ -90,6 +92,7 @@ typedef struct
                                      to retrieve the data from the network. */
   size_t buf_fill_level;        /**< Amount of data in the buffer */
 
+  enum cwd_states comgestion_state;
   size_t cwnd;
   size_t ssthresh;
 
@@ -126,6 +129,8 @@ typedef struct {
     microtcp_header_t header;
     uint8_t payload[MICROTCP_MSS];
 }message_t;
+
+
 
 size_t min(size_t a, size_t b, size_t c) {
     size_t min_value = a;

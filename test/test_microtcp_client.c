@@ -64,10 +64,8 @@ main(int argc, char **argv)
     ssize_t res;
     do{
         res = microtcp_recv(&sock, resbuff, MICROTCP_MSS, 0);
+        printf("res = %zu\n", res);
     } while (res > 0);
-    if(res == -1){
-        perror("error in recv\n");
-    }
 
 
     if(microtcp_shutdown(&sock, 1) == -1){

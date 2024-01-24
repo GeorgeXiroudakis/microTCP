@@ -530,13 +530,11 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
                int flags)
 {
     size_t remaining = length;
-    size_t data_sent = 0;
-    size_t bytes_to_send;
+    ssize_t data_sent = 0;
+    ssize_t bytes_to_send;
     size_t chunks;
     size_t flow_ctrl_win = socket->init_win_size;
-    size_t cwnd = 0;
     size_t extraChunkSize;
-    size_t header_size = 0;
     size_t extraPayload  = 0;
     size_t maxPayload = 0;
 
@@ -545,17 +543,22 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
     size_t i = 0;
 
     int tripleACKCounter = 0;
+    int retransmission_flag = 0;
+    socket->comgestion_state = slow_start;
+    socket->cwnd = 1;
+    socket->ssthresh = MICROTCP_WIN_SIZE;
 
 
     while(data_sent < length){
-        bytes_to_send = min( remaining , 99999999999999 , 99999999999999);
+        bytes_to_send = min( remaining , flow_ctrl_win , socket->cwnd * MICROTCP_MSS);
+        printf("\n\n\nthe winer is %zu\n\n\n", bytes_to_send);
         chunks = bytes_to_send / MICROTCP_MSS;
-        extraChunkSize = bytes_to_send %MICROTCP_MSS;
+        extraChunkSize = bytes_to_send % MICROTCP_MSS;
         if(chunks == 0){
             perror("error with chunk size cant be zero");
             return -1;
         }
-        maxPayload = ((length - extraChunkSize)/chunks) - sizeof(message.header);
+        maxPayload = ((bytes_to_send - extraChunkSize)/chunks) - sizeof(message.header);
         tripleACKCounter = 0;
         size_t excpectedACK[chunks + 1];
 
@@ -566,6 +569,8 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
 #endif
 
         for(i = 0; i < chunks; i++){
+
+            retransmission_flag = 0;
 
 #ifdef DEBUGPRINTS
             printf("Sending %zu chunk\n",i);
@@ -642,13 +647,35 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
                 perror(" error in setsockopt\n");
             }
 
-
             ssize_t bytesReceived = recvfrom(socket->sd, &resivebuff, sizeof (message_t), 0, &socket->peerAdress, &socket->peerAdressLen);
 
             if (bytesReceived < 0) {
                 if (errno == EWOULDBLOCK || errno == EAGAIN) {
                     printf("Receive timeout occurred\n");
-                    //retrasmit                                             //TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+                    if(socket->comgestion_state == slow_start){
+                        socket->ssthresh = socket->cwnd/2;
+                        socket->cwnd = 1;
+                        tripleACKCounter = 0;
+                    }else if(socket->comgestion_state == congestion_avoidance){
+#ifdef DEBUGPRINTS
+                        printf("\nFrom congestion avoidance to slow start\n");
+#endif
+                        socket->comgestion_state = slow_start;
+                        socket->ssthresh = socket->cwnd/2;
+                        socket->cwnd = 1;
+                        tripleACKCounter = 0;
+                    }else if(socket->comgestion_state == fast_recovery){
+#ifdef DEBUGPRINTS
+                        printf("\nFrom fast recovery to slow start\n");
+#endif
+                        socket->comgestion_state = slow_start;
+                        socket->ssthresh = socket->cwnd/2;
+                        socket->cwnd = 1;
+                        tripleACKCounter = 0;
+                    }
+
+                    retransmission_flag = 1;                                            //TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 } else {
                     return -1;
                 }
@@ -660,16 +687,133 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
 
             if ((ackMesege.header.control & ACK_FLAG) != (ACK_FLAG) )return -1;
 
+            flow_ctrl_win = message.header.window;
+
+
+            //the clients buffer is full
+            while (flow_ctrl_win == 0){
+                recvfrom(socket->sd, socket->recvbuf, MICROTCP_RECVBUF_LEN, 0, &socket->peerAdress, &socket->peerAdressLen);
+                memcpy(&message,socket->recvbuf,sizeof(microtcp_header_t));
+
+                flow_ctrl_win = message.header.window;
+            }
+
+
             if (ackMesege.header.ack_number != excpectedACK[i]) {
                 tripleACKCounter++;
-                if(tripleACKCounter == 3) {
+                if(tripleACKCounter >= 3) {
                     printf("%s AND we got worng header header ack so retrasmit, a header ack: %u != soket seq: %zu \n", socket->isServer ? "i am server" : "i am client", ackMesege.header.ack_number, excpectedACK[i]);
-                    printf("retranmition warented\n");
-                    //retrasmition                                //TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+                    if(socket->comgestion_state != fast_recovery){
+#ifdef DEBUGPRINTS
+                        printf("\nFrom slow start or congestion avoidance to fast recovery\n");
+#endif
+                        socket->comgestion_state = fast_recovery;
+                        socket->ssthresh = socket->cwnd/2;
+                        socket->cwnd = socket->ssthresh + 3 * MICROTCP_MSS;
+                    }else{
+                        socket->cwnd += MICROTCP_MSS;
+                    }
+                    retransmission_flag = 1;
                 }
             }
 
+            //after each succeefull ack add one to the cwd
+            if(socket->comgestion_state == slow_start) {
+                socket->cwnd += MICROTCP_MSS;
+                if(socket->cwnd >= socket->ssthresh){
+#ifdef  DEBUGPRINTS
+                    printf("\nFrom slow start to congestion avoidance\n");
+#endif
+
+                    socket->comgestion_state = congestion_avoidance;
+                }
+            }else if(socket->comgestion_state == congestion_avoidance){
+                socket->cwnd += MICROTCP_MSS + (MICROTCP_MSS/socket->cwnd);
+                tripleACKCounter =  0;
+            }else if(socket->comgestion_state == fast_recovery){
+#ifdef DEBUGPRINTS
+                printf("\nFrom fast recovery to congestion avoidance\n");
+#endif
+                socket->comgestion_state = congestion_avoidance;
+                socket->cwnd = socket->ssthresh;
+                tripleACKCounter = 0;
+            }
+
             socket->ack_number++;
+
+            if(retransmission_flag == 1){
+                //We retransmitt all the chunks from the last good ack we receive
+                size_t k = 0;
+                for(k = i ; k < chunks; k++){
+
+#ifdef DEBUGPRINTS
+                    printf("\nWe start retransmission from chunk %zu\n",k);
+#endif
+
+                    retransmission_flag = 0;
+
+#ifdef DEBUGPRINTS
+                    printf("Sending %zu chunk\n",i);
+#endif
+                    message.header.seq_number = socket->seq_number;
+                    message.header.ack_number = socket->ack_number;
+                    message.header.control = 0;
+                    message.header.window = 0;
+                    message.header.data_len = maxPayload ;
+                    message.header.future_use0 = 0;
+                    message.header.future_use1 = 0;
+                    message.header.future_use2 = 0;
+                    message.header.checksum = 0;
+                    memcpy(message.payload, buffer + k * maxPayload ,  message.header.data_len);
+                    message.header.checksum = crc32((const uint8_t *) &message, sizeof(message));
+                    printf("\ncheckum = %u\n", message.header.checksum);
+                    extraPayload += sizeof(microtcp_header_t);
+
+                    if(sendto(socket->sd, &message, (sizeof(message.header) + message.header.data_len), 0, &(socket->peerAdress), socket->peerAdressLen)  == -1){
+                        perror("error in sentTo in send\n");
+                    }
+                    socket->seq_number += message.header.data_len;
+
+#ifdef DEBUGPRINTS
+                    for(size_t j = 0;j < message.header.data_len;j++) {
+                        printf("%c", ((char *) message.payload)[j]);
+                    }
+                    printf("\nChunk %zu sent\n",k);
+#endif
+                }
+
+                //Extra chunk
+                if( bytes_to_send % MICROTCP_MSS){
+
+#ifdef DEBUGPRINTS
+                    printf("\nextraPayload %lu\n", extraPayload);
+#endif
+                    message.header.seq_number = socket->seq_number;
+                    message.header.ack_number = socket->ack_number;
+                    message.header.data_len = extraChunkSize + extraPayload;
+                    message.header.checksum = 0;
+                    memcpy(message.payload, buffer + (k * maxPayload), message.header.data_len);
+                    message.header.checksum = crc32((const uint8_t *) &message, sizeof(message));
+
+#ifdef DEBUGPRINTS
+                    printf("Sending extra %zu chunk\n",i);
+                    for(size_t j = 0;j < message.header.data_len;j++) {
+                        printf("%c", ((char *) message.payload)[j]);
+                    }
+#endif
+
+                    if(sendto(socket->sd, &message, sizeof(message.header) + message.header.data_len, 0, &(socket->peerAdress), socket->peerAdressLen)  == -1){
+                        perror("error in sentTo in send\n");
+                    }
+                    socket->seq_number += message.header.data_len;
+
+#ifdef DEBUGPRINTS
+                    printf("\nChunk %zu sent\n",i);
+#endif
+                }
+
+            }
         }
 
         remaining -= bytes_to_send;
@@ -696,7 +840,9 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
 #endif
     socket->seq_number++;
     printf("sented the fin\n");
-    return 0;
+
+
+    return data_sent;
 }
 
 int sentACK(microtcp_sock_t *socket){
@@ -705,6 +851,7 @@ int sentACK(microtcp_sock_t *socket){
     //sending duplicate ack
     message.header.seq_number = socket->seq_number;
     message.header.ack_number = socket->ack_number;
+    message.header.window = socket->curr_win_size;
     message.header.control = ACK_FLAG;
     message.header.window = 0;                  //////////////////////////////////////////////////////////////////////////////////////////////
     message.header.data_len = 0;
@@ -731,17 +878,31 @@ microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int flags)
 {
     message_t message;
     int ack = 0;
-    static size_t remainingSizeOfBuff = 0;
+    size_t remainingSizeOfBuff = socket->init_win_size;
 
 
     struct sockaddr resaddress;
     socklen_t resaddressLen;
     ssize_t ToatalDataReseved = 0;
+    size_t fillLevelOfBuffer = 0;
 
+    //reset the flow window
+    socket->curr_win_size = remainingSizeOfBuff;
+
+    while(remainingSizeOfBuff > 0 ){
+
+        //if we dont receive data it means that the server is done sending data so we return
+        struct timeval timeout;
+        timeout. tv_sec = 0;
+        timeout. tv_usec = MICROTCP_ACK_TIMEOUT_US;
+        if ( setsockopt( socket->sd , SOL_SOCKET, SO_RCVTIMEO , & timeout , sizeof( struct timeval)) < 0) {
+            perror(" error in setsockopt\n");
+        }
 
         //we resive data
-        if (recvfrom(socket->sd, socket->recvbuf, socket->curr_win_size, 0, &resaddress, &resaddressLen) == -1) {
-            return -1;
+        if (recvfrom(socket->sd, socket->recvbuf, socket->curr_win_size, 0, &resaddress, &resaddressLen) < 0) {
+            printf("No more data to resive right know\n");
+            return 0;
         }
 
         memcpy(&message.header, socket->recvbuf, sizeof(message.header));
@@ -779,35 +940,50 @@ microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int flags)
                    message.header.ack_number);
 #endif
             printf("returning correctly\n");
-            return -1;
+            return 0;
         }
 
         //check if server is done sending data
-        if((message.header.control & FIN_FLAG) == FIN_FLAG ){
+        if ((message.header.control & FIN_FLAG) == FIN_FLAG) {
             socket->ack_number++;
             return 0;
         }
 
         //save the seq# we got from the client
         socket->ack_number += message.header.data_len;
-        //adjust the total data
-        ToatalDataReseved += message.header.data_len;
+
+
+        //pass the data to the user
+        if(message.header.data_len <= remainingSizeOfBuff){
+            memcpy(buffer + fillLevelOfBuffer, message.payload, message.header.data_len);
+            //adjust the total data
+            ToatalDataReseved += message.header.data_len;
+            //if the if was unsuccessful the wille will fail
+            remainingSizeOfBuff -= message.header.data_len;
+            socket->curr_win_size = remainingSizeOfBuff;
 
 #ifdef DEBUGPRINTS
-        printf("resived: ");
-        for (size_t i = 0; i < message.header.data_len; i++) {
-            printf("%c", (message.payload)[i]);
+            printf("resived: ");
+            for (size_t i = 0; i < message.header.data_len; i++) {
+                printf("%c", (message.payload)[i]);
+            }
+
+            printf("\nsenting ACK\n");
+#endif
+        }else{
+            remainingSizeOfBuff = 0;
+            socket->curr_win_size = 0;
+
+            //sent headers with win = 0
         }
 
-        printf("senting ACK\n");
-#endif
-
         //sent ACK
-        printf("Sending  %d ack to server\n",ack);
+        printf("Sending  %d ack to server\n", ack);
         sentACK(socket);
         ack++;
-
+    }
 
     return ToatalDataReseved;
+
 }
 
