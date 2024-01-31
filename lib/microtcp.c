@@ -592,6 +592,8 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
             if(sendto(socket->sd, &message, (sizeof(message.header) + message.header.data_len), 0, &(socket->peerAdress), socket->peerAdressLen)  == -1){
                 perror("error in sentTo in send\n");
             }
+            socket.packets_send++;
+            socket.bytes_send += sizeof(message) - sizeof(message.header);
             socket->seq_number += message.header.data_len;
             excpectedACK[i] = socket->seq_number;
 
@@ -627,6 +629,8 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
             if(sendto(socket->sd, &message, sizeof(message.header) + message.header.data_len, 0, &(socket->peerAdress), socket->peerAdressLen)  == -1){
                 perror("error in sentTo in send\n");
             }
+            socket.packets_send++;
+            socket.bytes_send += sizeof(message) - sizeof(message.header);
             socket->seq_number += message.header.data_len;
             excpectedACK[chunks - 1] = socket->seq_number;
 
@@ -652,6 +656,7 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
             if (bytesReceived < 0) {
                 if (errno == EWOULDBLOCK || errno == EAGAIN) {
                     printf("Receive timeout occurred\n");
+                    socket->packets_lost++;
 
                     if(socket->comgestion_state == slow_start){
                         socket->ssthresh = socket->cwnd/2;
@@ -689,11 +694,16 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
 
             flow_ctrl_win = message.header.window;
 
+            socket->packets_received++;
+            socket->bytes_received++;
+
 
             //the clients buffer is full
             while (flow_ctrl_win == 0){
                 recvfrom(socket->sd, socket->recvbuf, MICROTCP_RECVBUF_LEN, 0, &socket->peerAdress, &socket->peerAdressLen);
                 memcpy(&message,socket->recvbuf,sizeof(microtcp_header_t));
+                socket->packets_received++;
+                socket->bytes_received++;
 
                 flow_ctrl_win = message.header.window;
             }
@@ -773,6 +783,8 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
                     if(sendto(socket->sd, &message, (sizeof(message.header) + message.header.data_len), 0, &(socket->peerAdress), socket->peerAdressLen)  == -1){
                         perror("error in sentTo in send\n");
                     }
+                    socket.packets_send++;
+                    socket.bytes_send += sizeof(message) - sizeof(message.header);
                     socket->seq_number += message.header.data_len;
 
 #ifdef DEBUGPRINTS
@@ -806,6 +818,9 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
                     if(sendto(socket->sd, &message, sizeof(message.header) + message.header.data_len, 0, &(socket->peerAdress), socket->peerAdressLen)  == -1){
                         perror("error in sentTo in send\n");
                     }
+
+                    socket.packets_send++;
+                    socket.bytes_send += sizeof(message) - sizeof(message.header);
                     socket->seq_number += message.header.data_len;
 
 #ifdef DEBUGPRINTS
@@ -835,6 +850,8 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
     if (sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen) == -1) {
         return -1;
     }
+    socket->packets_send++;
+    socket->bytes_send++;
 #ifdef DEBUGPRINTS
     printf("sent FIN with seq# = %d, ack# =  %d\n\n", message.header.seq_number, message.header.ack_number);
 #endif
@@ -864,6 +881,8 @@ int sentACK(microtcp_sock_t *socket){
     if (sendto(socket->sd, &message, sizeof(message), 0, &(socket->peerAdress), socket->peerAdressLen) == -1) {
         return -1;
     }
+    socket->packets_send++;
+    socket->bytes_send++;
 #ifdef DEBUGPRINTS
     printf("sent ACK with seq# = %d, ack# =  %d\n\n", message.header.seq_number, message.header.ack_number);
 #endif
@@ -930,6 +949,8 @@ microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int flags)
         //check if client wants to close the connection
         if ((message.header.control & FIN_FLAG | ACK_FLAG) == (FIN_FLAG | ACK_FLAG) && socket->isServer) {
             //save the seq# we got from the client
+            socket.packets_received++;
+            socket.bytes_received = sizeof(message) - sizeof(message.header);
             socket->ack_number++; //= message.header.seq_number;
 
             //change the socket state
