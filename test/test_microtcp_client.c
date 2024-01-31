@@ -65,7 +65,7 @@ main(int argc, char **argv)
     do{
         res = microtcp_recv(&sock, resbuff, MICROTCP_MSS, 0);
         printf("res = %zu\n", res);
-    } while (res > 0);
+    } while (sock.state != CLOSING_BY_PEER);
 
 
     if(microtcp_shutdown(&sock, 1) == -1){
