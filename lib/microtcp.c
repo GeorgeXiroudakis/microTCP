@@ -550,7 +550,7 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
     socket->cwnd = MICROTCP_MSS;
     socket->ssthresh = MICROTCP_WIN_SIZE;
 
-
+    //While there is still data to sent
     while(data_sent < length){
         bytes_to_send = min( remaining , flow_ctrl_win , socket->cwnd);
         printf("\n\n\nthe winner is %zu\n\n\n", bytes_to_send);
@@ -569,7 +569,7 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
         printf("\nmaxPayload = %zu\n", maxPayload);
         printf("\nextraChunkSize = %zu\n", extraChunkSize);
 #endif
-
+        //Sending the chunks
         for(i = 0; i < chunks; i++){
 
             retransmission_flag = 0;
@@ -607,7 +607,7 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
 #endif
         }
 
-
+        //Extra chunk
         if(bytes_to_send % MICROTCP_MSS){
             chunks++;
 
@@ -644,6 +644,12 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
         //resive asks
         void* resivebuff[MICROTCP_RECVBUF_LEN];
         message_t ackMesege;
+
+        //Here the problem is that the retransmission should be out of the for loop 
+        //Because if the client sends an ACK and wants retransmission the receiver will see it 
+        //But wont retransmitt until he receives all the acks for the packets he sent
+        //The retransmissions need to also have their own ACK receivers 
+        //We tried doing it but the code becomes unreadable and it adds 200-300 lines of code
 
         for(i = 0; i < chunks; i++){
             struct timeval timeout;
@@ -693,6 +699,7 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
 
             memcpy(&ackMesege, resivebuff, sizeof(message_t));
 
+            //If we dont receive an ACK
             if ((ackMesege.header.control & ACK_FLAG) != (ACK_FLAG) )return -1;
 
             flow_ctrl_win = message.header.window;
@@ -722,8 +729,10 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
             }
 
 
+            //If the ack we receive is not what we expected
             if (ackMesege.header.ack_number != excpectedACK[i]) {
                 tripleACKCounter++;
+                //Triple Ack Handler
                 if(tripleACKCounter >= 3) {
                     printf("%s AND we got worng header header ack so retrasmit, a header ack: %u != soket seq: %zu \n", socket->isServer ? "i am server" : "i am client", ackMesege.header.ack_number, excpectedACK[i]);
 
