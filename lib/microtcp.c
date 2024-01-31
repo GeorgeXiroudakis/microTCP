@@ -21,6 +21,19 @@
 #include "microtcp.h"
 #include "../utils/crc32.h"
 
+int
+check_resived_checksum(message_t message){
+    uint32_t revivedChecksum = message.header.checksum;
+
+    //zero out the cheksum in the message as that's how the sender calculated
+    message.header.checksum = 0;
+    if(revivedChecksum != crc32((const uint8_t*) &message, sizeof(message) + message.header.data_len)){
+        return -1;
+    }
+
+    return 0;
+}
+
 microtcp_sock_t
 microtcp_socket (int domain, int type, int protocol)
 {
@@ -62,18 +75,7 @@ microtcp_socket (int domain, int type, int protocol)
     return  sock;
 }
 
-int
-check_resived_checksum(message_t message){
-    uint32_t revivedChecksum = message.header.checksum;
 
-    //zero out the cheksum in the message as that's how the sender calculated
-    message.header.checksum = 0;
-    if(revivedChecksum != crc32((const uint8_t*) &message, sizeof(message))){
-        return -1;
-    }
-
-    return 0;
-}
 
 int
 microtcp_bind (microtcp_sock_t *socket, const struct sockaddr *address,
@@ -705,6 +707,7 @@ microtcp_send (microtcp_sock_t *socket, const void *buffer, size_t length,
                 socket->packets_received++;
                 socket->bytes_received++;
 
+                if ((ackMesege.header.control & ACK_FLAG) != (ACK_FLAG) )continue;
                 flow_ctrl_win = message.header.window;
             }
 
@@ -930,9 +933,11 @@ microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int flags)
 
         printf("\ncheckum = %u\n", message.header.checksum);
         //check that we revived the message correctly
-        //if (check_resived_checksum(message)){                //TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        //        if(sentACK(socket) == -1)return -1;
-        //    }
+        if (check_resived_checksum(message)){                //TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                //send duplicate ack
+            printf("\n\nFAIL\n\n");
+                if(sentACK(socket) == -1)return 0;
+            }
 
 //        //check the seq
 //        if (message.header.ack_number != socket->seq_number) {
@@ -995,6 +1000,8 @@ microtcp_recv (microtcp_sock_t *socket, void *buffer, size_t length, int flags)
             remainingSizeOfBuff = 0;
             socket->curr_win_size = 0;
 
+
+            //sentACK(socket);
             //sent headers with win = 0
         }
 
