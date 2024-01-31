@@ -227,7 +227,7 @@ server_microtcp (uint16_t listen_port, const char *file)
     }
 
     clock_gettime (CLOCK_MONOTONIC_RAW, &start_time);
-    while ((received = microtcp_recv(accepted/*our socket*/, buffer, CHUNK_SIZE, 0)) > 0) {
+    while ((received = microtcp_recv(&sock/*our socket*/, buffer, CHUNK_SIZE, 0)) > 0) {
         written = fwrite (buffer, sizeof(uint8_t), received, fp);
         total_bytes += received;
         if (written * sizeof(uint8_t) != received) {
@@ -246,7 +246,7 @@ server_microtcp (uint16_t listen_port, const char *file)
     print_statistics (total_bytes, start_time, end_time);
 
 
-    microtcp_shutdown(accepted, SHUT_RDWR);
+    //microtcp_shutdown(accepted, SHUT_RDWR);
     microtcp_shutdown(&sock, SHUT_RDWR);
     close (accepted);
     close (sock.sd);
